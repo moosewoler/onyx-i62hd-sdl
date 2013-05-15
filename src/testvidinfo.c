@@ -14,6 +14,7 @@
 #include <linux/mxcfb.h>
 
 #include "SDL.h"
+#include "SDL_image.h"
 
 #define NUM_BLITS	10
 #define NUM_UPDATES	500
@@ -142,21 +143,36 @@ void RunVideoTests()
     }
     else
     {
-        for (i=100; i<110; i++)
+        SDL_FillRect(screen, NULL, SDL_MapRGB(screen->format, 0xff, 0xff, 0xff));
+        SDL_UpdateRect(screen, 0, 0, 0, 0);
+        epdc_update(0,0, screen_width, screen_height, WAVEFORM_MODE_GC16, 1, 0);
+
+        for (i=100; i<200; i++)
         {
-            for (j=100; j<110; j++)
+            for (j=100; j<200; j++)
             {
                 printf("4\n");
-                DrawPixel(screen, i,j, 0xFF,0xFF,0xFF);
+                DrawPixel(screen, i,j, 0,0,0);
             }
         }
+        
         epdc_update(0,0, screen_width, screen_height, WAVEFORM_MODE_A2, 1, EPDC_FLAG_FORCE_MONOCHROME);
     }
+
+
     printf("5\n");
 }
 
 int main(int argc, char *argv[])
 {
+    // 系统初始化
+    // test1：获得系统基本信息
+    // test2：测试SDL基本video功能——像素操作
+    // test3：测试SDL基本video功能——填充
+    // test4：测试blit
+    // test5：测试SDL_image
+    // test6：测试SDL_ttf
+
 	const SDL_VideoInfo *info;
 	int i;
 	SDL_Rect **modes;
@@ -324,4 +340,23 @@ void epdc_update(int left, int top, int width, int height, int waveform, int wai
         }
         close(fbcon_fd);
     }
+}
+
+int DrawImage( SDL_Surface *surface, char *image_path, int x_pos, int y_pos )
+{
+    SDL_Surface *image = IMG_Load ( image_path );
+    if ( !image )
+    {
+        printf ( "IMG_Load: %s\n", IMG_GetError () );
+        return 1;
+    }
+
+    // Draws the image on the screen:
+    SDL_Rect rcDest = { x_pos, y_pos, 0, 0 };
+    SDL_BlitSurface ( image, NULL, surface, &rcDest );
+
+    // something like SDL_UpdateRect(surface, x_pos, y_pos, image->w, image->h); is missing here
+
+    SDL_FreeSurface ( image );
+    return 0;
 }

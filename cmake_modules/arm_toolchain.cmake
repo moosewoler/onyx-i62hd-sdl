@@ -49,7 +49,7 @@ set (PDF_LIB libfpdfemb_arm.a)
 set (TTS_LIB AiSound4)
 
 if (LINK_ZLIB_DEFAULT)
-    set     (ADD_LIB m rt pthread dl z SDL)
+    set     (ADD_LIB m rt pthread dl z SDL SDL_image)
 else (LINK_ZLIB_DEFAULT)
     set     (ADD_LIB m rt pthread dl)
 endif (LINK_ZLIB_DEFAULT)
