@@ -1,11 +1,19 @@
-
-/* Simple program -- figure out what kind of video display we have */
+/*******************************************************************************
+ *          test-sdl.c
+ * Description:
+ *  this file tests some basic sdl video operations on onyx i62hd e-ink device.
+ * 
+ *  use SDL to deal with image buffers, use mxcfb to deal with epdc operations.
+ * History:
+ *  2013-05-20 NEW
+ ******************************************************************************/
 
 #include <stdlib.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
+// headers for using mxc-epdc
 #include <fcntl.h>
 #include <unistd.h>
 #include <sys/types.h>
@@ -13,12 +21,27 @@
 #include <sys/mman.h>
 #include <linux/mxcfb.h>
 
+// headers for using SDL
 #include "SDL.h"
 #include "SDL_image.h"
 
+void init_sdl(void);
+void quit_sdl(void);
+void test_videoinfo(void);
+void test_drawpixel(void);
+void test_fillrectangle(void);
+int  test_drawimage(void);
+void epdc_update(int left, int top, int width, int height, int waveform, int wait_for_complete, uint flags);
+
+struct _TMyScreen{
+    SDL_Surface*    surface;
+    const SDL_VideoInfo*  info;
+    char            driver_name[128];
+};
+struct _TMyScreen main_screen;
+
 #define NUM_BLITS	10
 #define NUM_UPDATES	500
-
 #define FLAG_MASK	(SDL_HWSURFACE | SDL_FULLSCREEN | SDL_DOUBLEBUF | \
                          SDL_SRCCOLORKEY | SDL_SRCALPHA | SDL_RLEACCEL  | \
                          SDL_RLEACCELOK)
@@ -163,110 +186,186 @@ void RunVideoTests()
     printf("5\n");
 }
 
+/*******************************************************************************
+ *          main()
+ ******************************************************************************/
 int main(int argc, char *argv[])
 {
+    int re;
     // 系统初始化
-    // test1：获得系统基本信息
-    // test2：测试SDL基本video功能——像素操作
-    // test3：测试SDL基本video功能——填充
-    // test4：测试blit
-    // test5：测试SDL_image
-    // test6：测试SDL_ttf
+    setenv("SDL_NOMOUSE", "1", 1);
+	setenv("SDL_VIDEO_FBCON_ROTATION", "UD", 1);
 
-	const SDL_VideoInfo *info;
-	int i;
-	SDL_Rect **modes;
-	char driver[128];
+    init_sdl();
 
-    // 初始化SDL
+    test_videoinfo();
+    test_drawpixel();
+    re = test_drawimage();
+
+    quit_sdl();
+
+	return(0);
+}
+
+void init_sdl(void)
+{
 	if ( SDL_Init(SDL_INIT_VIDEO) < 0 ) 
     {
         fprintf(stderr, "Couldn't initialize SDL: %s\n", SDL_GetError());
-		exit(1);
+		exit(-1);
 	}
 
-    // 获得video驱动名称
-	if ( SDL_VideoDriverName(driver, sizeof(driver)) ) {
-		printf("Video driver: %s\n", driver);
-	}
     // 获取video子系统信息
-	info = SDL_GetVideoInfo();
-    printf( "Current display: %dx%d, %d bits-per-pixel\n", info->current_w, info->current_h, info->vfmt->BitsPerPixel);
-	if ( info->vfmt->palette == NULL ) 
-    {
-		printf("	Red Mask = 0x%.8x\n", info->vfmt->Rmask);
-		printf("	Green Mask = 0x%.8x\n", info->vfmt->Gmask);
-		printf("	Blue Mask = 0x%.8x\n", info->vfmt->Bmask);
-	}
-    // 获取可用的全屏模式
-	modes = SDL_ListModes(NULL, SDL_FULLSCREEN);
-	if ( modes == (SDL_Rect **)0 ) 
-    {
-		printf("No available fullscreen video modes\n");
-	} 
-    else if ( modes == (SDL_Rect **)-1 ) 
-    {
-		printf("No special fullscreen video modes\n");
-	} else 
-    {
-		printf("Fullscreen video modes:\n");
-		for ( i=0; modes[i]; ++i ) 
-        {
-			printf("\t%dx%dx%d\n", modes[i]->w, modes[i]->h, info->vfmt->BitsPerPixel);
-		}
-	}
+    main_screen.info = SDL_GetVideoInfo();
 
-    // 是否有wm
-	if ( info->wm_available ) 
-    {
-		printf("A window manager is available\n");
-	}
-    // 是否有硬件显存
-	if ( info->hw_available ) 
-    {
-		printf("Hardware surfaces are available (%dK video memory)\n",
-			info->video_mem);
-	}
-    // 是否有硬件blit
-	if ( info->blit_hw ) 
-    {
-		printf( "Copy blits between hardware surfaces are accelerated\n");
-	}
-    // 是否有硬件Colorkey blit
-	if ( info->blit_hw_CC ) {
-		printf( "Colorkey blits between hardware surfaces are accelerated\n");
-	}
-    // 是否有硬件alpha blit
-	if ( info->blit_hw_A ) 
-    {
-		printf( "Alpha blits between hardware surfaces are accelerated\n");
-	}
-	if ( info->blit_sw ) 
-    {
-		printf( "Copy blits from software surfaces to hardware surfaces are accelerated\n");
-	}
-	if ( info->blit_sw_CC ) 
-    {
-		printf( "Colorkey blits from software surfaces to hardware surfaces are accelerated\n");
-	}
-	if ( info->blit_sw_A ) 
-    {
-		printf( "Alpha blits from software surfaces to hardware surfaces are accelerated\n");
-	}
-	if ( info->blit_fill ) 
-    {
-		printf( "Color fills on hardware surfaces are accelerated\n");
-	}
+    main_screen.surface = SDL_SetVideoMode(main_screen.info->current_w, 
+                                            main_screen.info->current_h, 
+                                            main_screen.info->vfmt->BitsPerPixel, 
+                                            SDL_FULLSCREEN);
 
+    if ( ! main_screen.surface) 
+    {
+        printf("Setting video mode failed: %s\n", SDL_GetError());
+        exit(-1);
+    }
+}
 
-    printf("1\n");
-    RunVideoTests();
-    printf("9\n");
-
+void quit_sdl(void)
+{
     // 释放SDL
 	SDL_Quit();
+}
 
-	return(0);
+void test_videoinfo(void)
+{
+    int i;
+    SDL_Rect **modes;
+
+    // 获得video驱动名称
+    if ( SDL_VideoDriverName(main_screen.driver_name, sizeof(main_screen.driver_name)) ) {
+        printf("Video driver: %s\n", main_screen.driver_name);
+    }
+
+    printf( "Current display: %dx%d, %d bits-per-pixel\n", main_screen.info->current_w, main_screen.info->current_h, main_screen.info->vfmt->BitsPerPixel);
+    if ( main_screen.info->vfmt->palette == NULL ) 
+    {
+        printf("	Red Mask = 0x%.8x\n",   main_screen.info->vfmt->Rmask);
+        printf("	Green Mask = 0x%.8x\n", main_screen.info->vfmt->Gmask);
+        printf("	Blue Mask = 0x%.8x\n",  main_screen.info->vfmt->Bmask);
+    }
+
+    // 获取可用的全屏模式
+    modes = SDL_ListModes(NULL, SDL_FULLSCREEN);
+    if ( modes == (SDL_Rect **)0 ) 
+    {
+        printf("No available fullscreen video modes\n");
+    } 
+    else if ( modes == (SDL_Rect **)-1 ) 
+    {
+        printf("No special fullscreen video modes\n");
+    } else 
+    {
+        printf("Fullscreen video modes:\n");
+        for ( i=0; modes[i]; ++i ) 
+        {
+            printf("\t%dx%dx%d\n", modes[i]->w, modes[i]->h, main_screen.info->vfmt->BitsPerPixel);
+        }
+    }
+
+    // 是否有硬件显存
+    if ( main_screen.info->hw_available ) 
+    {
+        printf("Hardware surfaces are available (%dK video memory)\n", main_screen.info->video_mem);
+    }
+    else
+    {
+        printf("Hardware surfaces are not available.\n");
+    }
+
+    // 是否有硬件blit
+    if ( main_screen.info->blit_hw ) 
+    {
+        printf( "Copy blits between hardware surfaces are accelerated\n");
+    }
+
+    // 是否有硬件Colorkey blit
+    if ( main_screen.info->blit_hw_CC ) {
+        printf( "Colorkey blits between hardware surfaces are accelerated\n");
+    }
+
+    // 是否有硬件alpha blit
+    if ( main_screen.info->blit_hw_A ) 
+    {
+        printf( "Alpha blits between hardware surfaces are accelerated\n");
+    }
+
+
+    if ( main_screen.info->blit_sw ) 
+    {
+        printf( "Copy blits from software surfaces to hardware surfaces are accelerated\n");
+    }
+    if ( main_screen.info->blit_sw_CC ) 
+    {
+        printf( "Colorkey blits from software surfaces to hardware surfaces are accelerated\n");
+    }
+    if ( main_screen.info->blit_sw_A ) 
+    {
+        printf( "Alpha blits from software surfaces to hardware surfaces are accelerated\n");
+    }
+    if ( main_screen.info->blit_fill ) 
+    {
+        printf( "Color fills on hardware surfaces are accelerated\n");
+    }
+}
+
+void test_drawpixel(void)
+{
+    int i,j;
+    // 清屏
+    SDL_FillRect(main_screen.surface, NULL, SDL_MapRGB(main_screen.surface->format, 0xff, 0xff, 0xff));
+    SDL_UpdateRect(main_screen.surface, 0, 0, 0, 0);
+    epdc_update(0,0, main_screen.info->current_w, main_screen.info->current_h, WAVEFORM_MODE_GC16, 1, 0);
+
+    for (i=0; i<main_screen.info->current_w; i+=10)
+    {
+        for (j=0; j<main_screen.info->current_h/2; j+=10)
+        {
+            DrawPixel(main_screen.surface, i,j, 0,0,0);
+        }
+    }
+    epdc_update(0,0, main_screen.info->current_w, main_screen.info->current_h, WAVEFORM_MODE_GC16, 1, EPDC_FLAG_FORCE_MONOCHROME);
+}
+void test_fillrectangle(void)
+{
+}
+int test_drawimage(void)
+{
+    SDL_Rect rect1= { 100, 100, 0, 0 };
+    SDL_Rect rect2= { 100, 500, 0, 0 };
+    SDL_Surface *image1;
+    SDL_Surface *image2;
+    image1 = IMG_Load("sdl_logo.png");
+    if ( !image1 )
+    {
+        printf ( "IMG_Load: %s\n", IMG_GetError () );
+        return 1;
+    }
+    image2 = IMG_Load("onyx_logo.png");
+    if ( !image2 )
+    {
+        printf ( "IMG_Load: %s\n", IMG_GetError () );
+        return 1;
+    }
+
+    // Draws the image on the screen:
+    SDL_BlitSurface( image1, NULL, main_screen.surface, &rect1 );
+    SDL_BlitSurface( image2, NULL, main_screen.surface, &rect2 );
+    SDL_UpdateRect(main_screen.surface, 0, 0, 0, 0);
+    epdc_update(0,0, main_screen.info->current_w, main_screen.info->current_h, WAVEFORM_MODE_GC16, 1, 0);
+
+    SDL_FreeSurface ( image1 );
+    SDL_FreeSurface ( image2 );
+    return 0;
 }
 
 
@@ -342,21 +441,3 @@ void epdc_update(int left, int top, int width, int height, int waveform, int wai
     }
 }
 
-int DrawImage( SDL_Surface *surface, char *image_path, int x_pos, int y_pos )
-{
-    SDL_Surface *image = IMG_Load ( image_path );
-    if ( !image )
-    {
-        printf ( "IMG_Load: %s\n", IMG_GetError () );
-        return 1;
-    }
-
-    // Draws the image on the screen:
-    SDL_Rect rcDest = { x_pos, y_pos, 0, 0 };
-    SDL_BlitSurface ( image, NULL, surface, &rcDest );
-
-    // something like SDL_UpdateRect(surface, x_pos, y_pos, image->w, image->h); is missing here
-
-    SDL_FreeSurface ( image );
-    return 0;
-}
