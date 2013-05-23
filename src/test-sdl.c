@@ -351,6 +351,7 @@ int test_drawimage(void)
     SDL_Rect rect2= { 100, 500, 0, 0 };
     SDL_Surface *image1;
     SDL_Surface *image2;
+
     image1 = IMG_Load("sdl_logo.png");
     if ( !image1 )
     {
@@ -374,15 +375,33 @@ int test_drawimage(void)
     {
         SDL_Rect drect1 = {0,0, image1->w, image1->h};
         SDL_Rect drect2 = {0,0, image2->w, image2->h};
-        SDL_Rect rect3= { 100, 200, 0, 0 };
-        SDL_Rect rect4= { 100, 300, 0, 0 };
+        SDL_Rect rect3= { 600, 200, 0, 0 };
+        SDL_Rect rect4= { 0, 0, 0, 0 };
         ditherize(image1, &drect1);
         ditherize(image2, &drect2);
         SDL_BlitSurface( image1, NULL, main_screen.surface, &rect3 );
         SDL_BlitSurface( image2, NULL, main_screen.surface, &rect4 );
+
     }
     SDL_UpdateRect(main_screen.surface, 0, 0, 0, 0);
     epdc_update(0,0, main_screen.info->current_w, main_screen.info->current_h, WAVEFORM_MODE_A2, 1, EPDC_FLAG_FORCE_MONOCHROME);
+
+    // move image
+    {
+        int i;
+        SDL_Rect rect3= { 0, 0, 0, 0 };
+        for (i=0;i<200;i+=5)
+        {
+            // 清屏
+            SDL_FillRect(main_screen.surface, &rect3, SDL_MapRGB(main_screen.surface->format, 0xff, 0xff, 0xff));
+            SDL_UpdateRect(main_screen.surface, 0, 0, 0, 0);
+            rect3.x=i;
+            SDL_BlitSurface( image2, NULL, main_screen.surface, &rect3 );
+            SDL_UpdateRect(main_screen.surface, 0, 0, 0, 0);
+            epdc_update(0,0, main_screen.info->current_w, main_screen.info->current_h, WAVEFORM_MODE_A2, 1, EPDC_FLAG_FORCE_MONOCHROME);
+        }
+    }
+    epdc_update(0,0, main_screen.info->current_w, main_screen.info->current_h, WAVEFORM_MODE_GC16, 1, 0);
 
     SDL_FreeSurface ( image1 );
     SDL_FreeSurface ( image2 );
@@ -489,19 +508,15 @@ void ditherize(SDL_Surface* surface, SDL_Rect* rect)
     {
         if ( SDL_LockSurface(surface) < 0 ) 
         {
-            printf("surface cannot be locked.\n");
             return;
         }
-        printf("surface locked\n");
     }
 
-    printf("access image pixels\n");
-    MWO_DEBUG(surface->format->BytesPerPixel);
     switch (surface->format->BytesPerPixel) 
     {
         case 3: 
             {
-                // 24bpp, r8g8b8。 慢速字节操作
+                // 24bpp, r8g8b8。 慢速像素操作
                 for (y= rect->y; y<rect->y+rect->h; y++)
                 {
                     for (x= rect->x; x<rect->x+rect->w; x++)
@@ -518,22 +533,21 @@ void ditherize(SDL_Surface* surface, SDL_Rect* rect)
 
                         if (color > dither_map_64[x&7, y&7])
                         {
-                            *(pptr+surface->format->Rshift/8) = 0;
-                            *(pptr+surface->format->Gshift/8) = 0;
-                            *(pptr+surface->format->Bshift/8) = 0;
-                            printf("0");
-                        }
-                        else
-                        {
                             *(pptr+surface->format->Rshift/8) = 0xFF;
                             *(pptr+surface->format->Gshift/8) = 0xFF;
                             *(pptr+surface->format->Bshift/8) = 0xFF;
-                            printf(" ");
                         }
+                        else
+                        {
+                            *(pptr+surface->format->Rshift/8) = 0;
+                            *(pptr+surface->format->Gshift/8) = 0;
+                            *(pptr+surface->format->Bshift/8) = 0;
+                        }
+
                     }
-                    printf("\n");
                 }
             }
+            break;
         case 2: 
             { 
                 // 目前只支持16bpp. i62hd用16bpp，r5g6b5
@@ -554,11 +568,11 @@ void ditherize(SDL_Surface* surface, SDL_Rect* rect)
 
                         if (color > dither_map_64[x&7, y&7])
                         {
-                            color = 0;
+                            color = 0xFFFF;
                         }
                         else
                         {
-                            color = 0xFFFF;
+                            color = 0;
                         }
                         *pptr = color;
                     }
@@ -573,9 +587,5 @@ void ditherize(SDL_Surface* surface, SDL_Rect* rect)
     if ( SDL_MUSTLOCK(surface) ) 
     {
         SDL_UnlockSurface(surface);
-        printf("surface unlocked\n");
     }
-    
-
-
 }
