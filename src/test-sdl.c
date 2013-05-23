@@ -25,6 +25,12 @@
 #include "SDL.h"
 #include "SDL_image.h"
 
+#define MWO_DEBUG_STRING(var)    do { printf(#var" = %s\n", var); } while(0)
+#define MWO_DEBUG_FLOAT(var)     do { printf(#var" = %f\n", var); } while(0)
+#define MWO_DEBUG_POINTER(var)   do { printf(#var" = %p\n", var); } while(0)
+#define MWO_DEBUG_INT(var)       do { printf(#var" = %d\n", var); } while(0)
+#define MWO_DEBUG(var)           MWO_DEBUG_INT(var)
+
 void init_sdl(void);
 void quit_sdl(void);
 void test_videoinfo(void);
@@ -32,6 +38,7 @@ void test_drawpixel(void);
 void test_fillrectangle(void);
 int  test_drawimage(void);
 void epdc_update(int left, int top, int width, int height, int waveform, int wait_for_complete, uint flags);
+void ditherize(SDL_Surface* surface, SDL_Rect* rect);
 
 struct _TMyScreen{
     SDL_Surface*    surface;
@@ -357,11 +364,25 @@ int test_drawimage(void)
         return 1;
     }
 
-    // Draws the image on the screen:
+    // Draws the image on the screen
     SDL_BlitSurface( image1, NULL, main_screen.surface, &rect1 );
     SDL_BlitSurface( image2, NULL, main_screen.surface, &rect2 );
     SDL_UpdateRect(main_screen.surface, 0, 0, 0, 0);
     epdc_update(0,0, main_screen.info->current_w, main_screen.info->current_h, WAVEFORM_MODE_GC16, 1, 0);
+
+    // Draw ditherized image
+    {
+        SDL_Rect drect1 = {0,0, image1->w, image1->h};
+        SDL_Rect drect2 = {0,0, image2->w, image2->h};
+        SDL_Rect rect3= { 100, 200, 0, 0 };
+        SDL_Rect rect4= { 100, 300, 0, 0 };
+        ditherize(image1, &drect1);
+        ditherize(image2, &drect2);
+        SDL_BlitSurface( image1, NULL, main_screen.surface, &rect3 );
+        SDL_BlitSurface( image2, NULL, main_screen.surface, &rect4 );
+    }
+    SDL_UpdateRect(main_screen.surface, 0, 0, 0, 0);
+    epdc_update(0,0, main_screen.info->current_w, main_screen.info->current_h, WAVEFORM_MODE_A2, 1, EPDC_FLAG_FORCE_MONOCHROME);
 
     SDL_FreeSurface ( image1 );
     SDL_FreeSurface ( image2 );
@@ -441,3 +462,120 @@ void epdc_update(int left, int top, int width, int height, int waveform, int wai
     }
 }
 
+/*******************************************************************************
+ * function :   ditherize
+ * memo     :   Dither a surface by using ordered dither.  
+ * para     :   
+ *  [in] surface             
+ *  [in] rect
+ *  x,y: screen coordinates, c: color(0-64).
+ ******************************************************************************/
+void ditherize(SDL_Surface* surface, SDL_Rect* rect)
+{
+    Sint32 x,y;
+    // 64 threshold dither table
+    // see http://en.wikipedia.org/wiki/Ordered_dithering
+    static int dither_map_64[64] = { 
+        1, 33,9, 41,3, 35,11,43,
+        49,17,57,25,51,19,59,27,
+        13,45,5, 37,15,47,7, 39,
+        61,29,53,21,63,31,55,23,
+        4, 36,12,44,2, 34,10,42,
+        52,20,60,28,50,18,58,26,
+        16,48,8, 40,14,46,6, 38,
+        64,32,56,24,62,30,54,22 }; 
+
+    if ( SDL_MUSTLOCK(surface) ) 
+    {
+        if ( SDL_LockSurface(surface) < 0 ) 
+        {
+            printf("surface cannot be locked.\n");
+            return;
+        }
+        printf("surface locked\n");
+    }
+
+    printf("access image pixels\n");
+    MWO_DEBUG(surface->format->BytesPerPixel);
+    switch (surface->format->BytesPerPixel) 
+    {
+        case 3: 
+            {
+                // 24bpp, r8g8b8。 慢速字节操作
+                for (y= rect->y; y<rect->y+rect->h; y++)
+                {
+                    for (x= rect->x; x<rect->x+rect->w; x++)
+                    {
+                        Uint8* pptr;
+                        Uint8  R,G,B;
+                        Uint8  color;
+                        pptr = (Uint8 *)surface->pixels + y*surface->pitch + x*3;
+                        R = *(pptr+surface->format->Rshift/8);
+                        G = *(pptr+surface->format->Gshift/8);
+                        B = *(pptr+surface->format->Bshift/8);
+
+                        color= 64*( 0.2126*R/256 + 0.7152*G/256 + 0.0722*B/256);// remap rgb into 64-level grayscale. see http://en.wikipedia.org/wiki/Grayscale
+
+                        if (color > dither_map_64[x&7, y&7])
+                        {
+                            *(pptr+surface->format->Rshift/8) = 0;
+                            *(pptr+surface->format->Gshift/8) = 0;
+                            *(pptr+surface->format->Bshift/8) = 0;
+                            printf("0");
+                        }
+                        else
+                        {
+                            *(pptr+surface->format->Rshift/8) = 0xFF;
+                            *(pptr+surface->format->Gshift/8) = 0xFF;
+                            *(pptr+surface->format->Bshift/8) = 0xFF;
+                            printf(" ");
+                        }
+                    }
+                    printf("\n");
+                }
+            }
+        case 2: 
+            { 
+                // 目前只支持16bpp. i62hd用16bpp，r5g6b5
+                for (x= rect->x; x<rect->x+rect->w; x++)
+                {
+                    for (y= rect->y; y<rect->y+rect->h; y++)
+                    {
+                        Uint16 *pptr;
+                        Uint16 color;
+                        Uint16  R,G,B;
+
+                        pptr = (Uint16 *)surface->pixels + y*surface->pitch/2 + x;
+                        color= *pptr;
+                        R = color & 0xF800;
+                        G = color & 0x07E0;
+                        B = color & 0x001F;
+                        color= 64*( 0.2126*R + 0.7152*G + 0.0722*B);            // remap rgb into 64-level grayscale. see http://en.wikipedia.org/wiki/Grayscale
+
+                        if (color > dither_map_64[x&7, y&7])
+                        {
+                            color = 0;
+                        }
+                        else
+                        {
+                            color = 0xFFFF;
+                        }
+                        *pptr = color;
+                    }
+                }
+
+            }
+            break;
+        default:
+            break;
+    }
+
+    if ( SDL_MUSTLOCK(surface) ) 
+    {
+        SDL_UnlockSurface(surface);
+        printf("surface unlocked\n");
+    }
+    
+
+
+}
