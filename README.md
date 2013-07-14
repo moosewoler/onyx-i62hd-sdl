@@ -56,3 +56,8 @@ port sdl to i62hd
         #define MWO_DEBUG_INT(var)       do { printf(#var" = %d\n", var); } while(0)
         #define MWO_DEBUG(var)           MWO_ECHO_INT(var)
 
+4 fbcon硬件加速
+---------------
+
+在SDL\_fbvideo.c中，FB\_VideoInit()中会通过宏来判断是否调用相应的硬件加速初始化函
+数FB\_xxxxAccel()，在该函数当中将特定的加速函数挂到相应的回调函数上。
