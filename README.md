@@ -1,5 +1,5 @@
-onyx-i62hd-sdl
-==============
+onyx-i62hd-sdl-test
+===================
 
 port sdl to i62hd
 
