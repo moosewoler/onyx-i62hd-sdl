@@ -201,7 +201,7 @@ int main(int argc, char *argv[])
     int re;
     // 系统初始化
     setenv("SDL_NOMOUSE", "1", 1);
-	setenv("SDL_VIDEO_FBCON_ROTATION", "UD", 1);
+    setenv("SDL_VIDEO_FBCON_ROTATION", "UD", 1);
 
     init_sdl();
 
@@ -211,24 +211,24 @@ int main(int argc, char *argv[])
 
     quit_sdl();
 
-	return(0);
+    return(0);
 }
 
 void init_sdl(void)
 {
-	if ( SDL_Init(SDL_INIT_VIDEO) < 0 ) 
+    if ( SDL_Init(SDL_INIT_VIDEO) < 0 ) 
     {
         fprintf(stderr, "Couldn't initialize SDL: %s\n", SDL_GetError());
-		exit(-1);
-	}
+        exit(-1);
+    }
 
     // 获取video子系统信息
     main_screen.info = SDL_GetVideoInfo();
 
     main_screen.surface = SDL_SetVideoMode(main_screen.info->current_w, 
-                                            main_screen.info->current_h, 
-                                            main_screen.info->vfmt->BitsPerPixel, 
-                                            SDL_FULLSCREEN);
+            main_screen.info->current_h, 
+            main_screen.info->vfmt->BitsPerPixel, 
+            SDL_FULLSCREEN);
 
     if ( ! main_screen.surface) 
     {
@@ -240,7 +240,7 @@ void init_sdl(void)
 void quit_sdl(void)
 {
     // 释放SDL
-	SDL_Quit();
+    SDL_Quit();
 }
 
 void test_videoinfo(void)
@@ -412,11 +412,11 @@ int test_drawimage(void)
 void epdc_update(int left, int top, int width, int height, int waveform, int wait_for_complete, uint flags)
 {
     // 见2013-02-22笔记1号
-	struct mxcfb_update_data upd_data;
+    struct mxcfb_update_data upd_data;
     __u32   upd_marker_data;
-	int     retval;
-	int     wait = wait_for_complete | flags;
-	int     max_retry = 10;
+    int     retval;
+    int     wait = wait_for_complete | flags;
+    int     max_retry = 10;
 
     // FIXME: 计算出合适的边界值
     //int tleft= -(left+width)+screen_info_.xres;
@@ -425,7 +425,7 @@ void epdc_update(int left, int top, int width, int height, int waveform, int wai
     int ttop = top;
 
     int fbcon_fd = -1;
-	fbcon_fd = open("/dev/fb0", O_RDWR, 0);
+    fbcon_fd = open("/dev/fb0", O_RDWR, 0);
     if (fbcon_fd < 0)
     {
         printf("cannot open fbdev\n");
@@ -466,6 +466,7 @@ void epdc_update(int left, int top, int width, int height, int waveform, int wai
             }
         }
 
+        // geekmaster said that we should not always wait for operation finished.
         if (wait) 
         {
             upd_marker_data = upd_data.update_marker;
